@@ -1,0 +1,99 @@
+model {
+  # No noise for ni_gam_decomp
+  for (i in 1:n_obs) {
+    # Main likelihood
+    y[i] ~ dnorm(mu_y[i], sigmasq_all[i]^-1)
+    sigmasq_all[i] <- sigma_y^2 + y_err[i]^2
+    
+    # Mean structure
+    # section[i]: E/W identifier
+    #r[i] <- B_t[i,] %*% b_t[section[i],]
+    mu_y[i] <- r[section[i]] + g_z_x[i] + h_z_x[i] 
+    
+    # Works
+    #mu_y[i] <- B_t[i,] %*% b_t[section[i],] + g_z_x[i] + h_z_x[i] 
+    
+    # Site specific vertical offset
+    h_z_x[i] <- intercept[site[i]]
+    
+    # Linear Local component
+    g_z_x[i] <- t[i] * b_g[site[i]]
+    
+    # Linear Local component + Site specific vertical offset
+    g_h_z_x[i] <- h_z_x[i] + g_z_x[i]
+    
+    
+    # Regional Attempt
+    #mu_y[i] <- r_east[I_east[i]] +  r_west[I_west[i]] + g_z_x[i] + h_z_x[i]
+    #mu_y[i] <- r_east[i]*I_east[i] +  r_west[I_west[i]] + g_z_x[i] + h_z_x[i]
+    #mu_y[i] <- r[i] + g_z_x[i] + h_z_x[i]
+    #r[i] <- r_east*I_east[i] +  r_west*I_west[i]
+
+  }
+  
+  # Regional Component
+  for (s in 1:n_section) {
+    #r[s[section_obs_id]] <- B_t[s[section_obs_id],] %*% b_t[s[section_obs_id],]
+    r[s[section_obs_id]] <- B_t[s[section_obs_id],] %*% b_t[s[section_obs_id],]
+    sigma_beta_r[s]~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+    for(j in 1:n_knots_t){
+        b_t[s,j] ~ dnorm(0, sigma_beta_r[s]^-2)
+      }
+  }
+  # Center the site variance on a combined 'world' variance
+  sigma_beta_r_world ~ dt(0, 1, 1)T(0,) 
+  
+  #for (s in 1:n_section) {
+  #  r[s] <- B_t[,s[section_obs_id]] %*% b_t[s]
+  #  for(j in 1:n_knots_t){
+  #    b_t[j] ~ dnorm(0, sigma_beta_r[s]^-2)
+  #  }
+  #  sigma_beta_r[s]~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+  #}
+  
+
+
+
+  # Regional term as just linear trend
+  #for (s in 1:n_section) {
+  #  r[s] ~ dnorm(0, sigma_beta_r[s]^-2)
+  #  sigma_beta_r[s] ~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+  #}
+  # Center the site variance on a combined 'world' variance
+  #sigma_beta_r_world ~ dt(0, 1, 1)T(0,) 
+  #sigma_beta_r ~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+  
+  # Regional Component as Separate components
+  #r_east <- B_t_east %*% b_t_east
+  #r_west <- B_t_west %*% b_t_west
+  #for (j in 1:n_knots_t_east) {
+  #   b_t_east[j] ~ dnorm(0, sigma_beta_r_east^-2) 
+  #}
+  #for (j in 1:n_knots_t_west) {
+  #   b_t_west[j] ~ dnorm(0, sigma_beta_r_west^-2) 
+  #}
+  
+  #sigma_beta_r_east ~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+  #sigma_beta_r_west ~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+  # Center the site variance on a combined 'world' variance
+  #sigma_beta_r_world ~ dt(0, 1, 1)T(0,) 
+  
+  # Prior on intercept
+  for (j in 1:n_sites) {
+    intercept[j] ~ dnorm(0, sigma_beta_h^-2)
+  }
+  # Linear Local component
+  for (j in 1:n_sites) {
+    b_g[j] ~ dnorm(linear_rate[j], linear_rate_err[j]^-2)
+  }
+  
+
+  # Priors
+  #sigma_beta_r ~ dt(0, 1, 1)T(0,) # Cauchy prior for sd
+  sigma_y ~ dt(0, 1^-2, 1)T(0,) 
+  sigma_beta_h ~ dt(2.5, 2^-2, 1)T(0,)
+  
+  
+  
+
+}

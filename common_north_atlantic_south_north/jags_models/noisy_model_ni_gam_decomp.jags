@@ -1,0 +1,111 @@
+model {
+# Noisy Input for ni_gam_decomp
+        for (i in 1:n_obs) {
+          # Main likelihood
+          y[i] ~ dnorm(mu_y[i], sigmasq_all[i]^-1)
+          sigmasq_all[i] <- sigma_y^2 + y_err[i]^2 + NI_var_term[i]^2
+
+          # Mean structure
+          r[i] <- B_t[i,] %*% b_t[section[i],]
+          mu_y[i] <- c[i] + r[i] + g_z_x[i] + h_z_x[i] + l[i]
+
+          # Derivative for the Total component
+          r_deriv[i] <- B_t_deriv[i,] %*% b_t[section[i],]
+          mu_deriv[i] <- c_deriv[i] + r_deriv[i] + g_z_x_deriv[i] + l_deriv[i] 
+
+          # Site specific vertical offset
+          h_z_x[i] <- intercept[site[i]]
+
+          # Linear Local component
+          g_z_x[i] <- t[i] * b_g[site[i]]
+
+          # Linear Local component + Site specific vertical offset
+          g_h_z_x[i] <- h_z_x[i] + g_z_x[i]
+
+          # Linear Local component
+          g_z_x_deriv[i] <- b_g[site[i]]
+
+          # Model residuals
+          #residuals[i] <- y[i] - mu_y[i]
+
+        }
+        # Informed Common component
+        c <- B_c %*% b_c
+        c_deriv <- B_c_deriv %*% b_c
+        c_pred <- B_c_pred %*% b_c
+        c_pred_deriv <- B_c_pred_deriv %*% b_c
+        for (j in 1:n_knots_c) {
+          b_c[j] ~ dnorm(b_c_value[j], b_c_sd_value[j]^-2)
+        }
+        
+      
+      # Informed Regional component
+      diff_r <- B_t %*% (b_t[1,] - b_t[2,])
+      diff_r_pred <- B_t_pred %*% (b_t[1,] - b_t[2,])
+      diff_r_deriv <- B_t_deriv %*% (b_t[1,] - b_t[2,])
+      diff_r_pred_deriv <- B_t_pred_deriv %*% (b_t[1,] - b_t[2,])
+      for(s in 1:n_section){
+        for (j in 1:n_knots_t) {
+            b_t[s,j] ~ dnorm(b_t_value[s,j], b_t_sd_value[s,j]^-2)
+          }
+        }
+  
+      # Non-linear local component
+      for (j in 1:n_knots_st) {
+        b_st[j] ~ dnorm(0, sigma_beta_l^-2)
+      }
+      l <- B_st %*% b_st
+      # Derivative of Non-linear local
+      l_deriv <- B_st_deriv %*% b_st
+      # Non-linear local component on prediction grid
+      l_pred <- B_st_pred %*% b_st
+      # Derivative of Non-linear local on prediction grid
+      l_pred_deriv <- B_st_deriv_pred %*% b_st
+ 
+
+      # Prior on intercept
+      for (j in 1:n_sites) {
+        intercept[j] ~ dnorm(h_value[j], h_sd_value[j]^-2)
+      }
+
+      # Linear Local component
+      for (j in 1:n_sites) {
+        b_g[j] ~ dnorm(linear_rate[j], linear_rate_err[j]^-2)
+      }
+
+    # Total for the prediction grid
+    for(i in 1:n_pred){
+        # Site specific vertical offset
+        h_z_x_pred[i] <- intercept[site_pred[i]]
+
+        # Linear Local component
+        g_z_x_pred[i] <- t_pred[i] * b_g[site_pred[i]]
+        # Linear Local component Derivative
+        g_z_x_pred_deriv[i] <- b_g[site_pred[i]]
+
+        # Linear Local component + Site specific vertical offset
+        g_h_z_x_pred[i] <- h_z_x_pred[i] + g_z_x_pred[i]
+        
+        
+        # Regional Components
+        r_pred[i] <- B_t_pred[i,] %*% b_t[section_pred[i],]
+        r_pred_deriv[i] <- B_t_pred_deriv[i,] %*% b_t[section_pred[i],]
+        
+        # Mean structure
+        mu_pred[i] <- c_pred[i] + r_pred[i]  + g_z_x_pred[i] + h_z_x_pred[i]+ l_pred[i]
+        
+        # Creating prediction intervals without uncertainty
+        sigmasq_all_pred[i] <- sigma_y^2
+        y_pred[i] ~ dnorm(mu_pred[i], sigmasq_all_pred[i]^-1)
+
+        # Derivative for the Total component
+        mu_pred_deriv[i] <- c_pred_deriv[i] + r_pred_deriv[i] + l_pred_deriv[i] + g_z_x_pred_deriv[i]
+
+
+    }
+
+    # Priors
+    sigma_beta_l ~ dt(0, 1^-2, 1)T(0,)
+    sigma_y ~ dt(0, 1^-2, 1)T(0,)
+
+  }
