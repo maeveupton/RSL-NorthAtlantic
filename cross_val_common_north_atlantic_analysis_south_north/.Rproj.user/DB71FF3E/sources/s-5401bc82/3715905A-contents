@@ -1,0 +1,240 @@
+# Examining patterns of RSL change along the North America coastline
+
+# Compare North (North of Cape Hattares sites) and South (South of Cape Hatteras sites) coasts of the North America 
+# New JAGS code
+
+# Using Andy's updated dataframe
+# Implementation using the reslr package
+
+# Clear workspace
+rm(list = ls())
+#---------Set working directory--------------
+setwd("/users/research/mupton/3. RSL_North_Atlantic/north_atlantic_north_south")
+#----------Load packages--------------------
+library(devtools)
+install_github("maeveupton/reslr", force = TRUE)
+library(reslr)
+library(tidyverse)
+library(ggplot2)
+library(ggtext)# for the map
+library(geosphere) #distm
+library("rnaturalearth")#n_states for map
+library(ggrepel)# labels_repel
+library(ggspatial)# annotation_scale
+library(xtable)# Writing latex tables of results
+
+# R functions-------
+source("R/plot_data.R")# Plotting separate north & south data
+source("R/internal_functions.R")# New basis functions for north & south data
+source("R/reslr_mcmc_fun.R")# New basis functions for north & south data
+
+# Read in Andy's updated data:
+global_data <- read_csv("https://www.dropbox.com/s/kqv3o10dnnbx38w/CommonEra2023_new.csv?dl=1")
+colnames(global_data)<- c("Basin","Region","Site","Reference","Indicator",
+                          "Latitude","Longitude","RSL","RSL_err_upr","RSL_err_lwr","Age","Age_2_err_upr","Age_2_err_lwr")
+# Updating the column names:
+global_df <- global_data %>% 
+  group_by(Site) %>% 
+  mutate(RSL_err = (RSL_err_upr + RSL_err_lwr)/2,
+         Age_err = ((Age_2_err_upr/2) + (Age_2_err_lwr/2))/2) %>% 
+  # Only looking at Common era
+  filter(Age >= 0) 
+
+# Selecting North Atlantic data
+SL_df <- global_df %>%
+  filter(Basin == "North Atlantic") 
+
+# Removing Spain as it is problem with linear rate
+SL_df <- SL_df %>%
+  dplyr::filter(!Region == "Norway") %>% 
+  dplyr::filter(!Site %in% c("Muskiz Estuary","Plentzia Estuary")) 
+
+
+
+# Remove index points
+SL_df <- SL_df %>%
+  dplyr::group_by(Site)%>%
+  dplyr::filter(dplyr::n()>2) %>%
+  # Combine Sand Point Russian & VC
+  mutate(Site = replace(Site, Site == "Sand Point Russian", "Sand Point")) %>%
+  mutate(Site = replace(Site, Site == "Sand Point VC", "Sand Point"))
+
+# North American sites only------------
+SL_df <- SL_df %>% filter(Region %in% c("Connecticut",
+                                        "Florida",
+                                        "Massachusetts",
+                                        "North Carolina","New Jersey",
+                                        "Magdelen Islands","Newfoundland",
+                                        "Quebec","Nova Scotia","Maine","New York","Rhode Island"))
+
+# We dont include tide gauges
+north_america_reslr <- reslr_load(data = SL_df,
+                                  include_tide_gauge = FALSE,
+                                  include_linear_rate = TRUE)
+saveRDS(north_america_reslr,file = "reslr_inputs/north_america_reslr_no_TG_LR.rds")
+
+#north_america_reslr <- readRDS("reslr_inputs/north_america_reslr_TG_LR.rds")
+north_america_reslr <- readRDS("reslr_inputs/north_america_reslr_no_TG_LR.rds")
+
+data <- north_america_reslr$data %>%
+  mutate(section = ifelse(Latitude > 35.2505,"North Cape Hatteras","South Cape Hatteras"))
+
+data_grid <- north_america_reslr$data_grid %>%
+  mutate(section = ifelse(Latitude > 35.2505,"North Cape Hatteras","South Cape Hatteras"))
+# # Running the ni-gam using updated reslr code-----------
+# north_america_reslr_output <-
+#   reslr_mcmc_fun(data,data_grid,
+#              n_iterations = 100,
+#              n_burnin = 1,
+#              n_thin = 1,
+#              n_chains = 1)
+# saveRDS(north_america_reslr_output,file = "reslr_outputs/north_america_reslr_TG_LR_output_reg2.rds")
+# north_america_reslr_output <- readRDS("reslr_outputs/north_america_reslr_TG_LR_output_reg2.rds")
+
+# Running model using reslr-------
+north_america_reslr_output <-
+  reslr_mcmc(north_america_reslr, model_type = "ni_gam_decomp")
+# saveRDS(north_america_reslr_output,file = "reslr_outputs/north_america_reslr_TG_LR_output.rds")
+saveRDS(north_america_reslr_output,file = "reslr_outputs/north_america_reslr_no_TG_LR_output.rds")
+#north_america_reslr_output <- readRDS("reslr_outputs/north_america_reslr_TG_LR_output.rds")
+north_america_reslr_output <- readRDS("reslr_outputs/north_america_reslr_no_TG_LR_output.rds")
+
+# Separating the data grid with North Cape Hatteras and South Cape Hatteras----------- 
+data <- north_america_reslr_output$data # full dataset
+# Longitude: -75.5288 & Latitude: 35.2505
+north_cape_data <- north_america_reslr_output$data %>% filter(Latitude > 35.2505)
+data_plot_north <- plot_data(north_cape_data)
+ggsave(data_plot_north,filename = "fig/data_plot_north.pdf",height = 6, width= 10)
+south_cape_data <- north_america_reslr_output$data %>% filter(Latitude < 35.2505)
+data_plot_south <- plot_data(south_cape_data)
+ggsave(data_plot_south,filename = "fig/data_plot_south.pdf",height = 6, width= 10)
+# Data grids:
+north_cape_data_grid <- 
+  north_america_reslr_output$data_grid %>% 
+  filter(Latitude > 35.2505)
+south_cape_data_grid <- 
+  north_america_reslr_output$data_grid %>% 
+  filter(Latitude < 35.2505)
+# Posterior samples for the regional component:
+b_post_r <- north_america_reslr_output$noisy_model_run_output$BUGSoutput$sims.list$b_t
+
+# New basis functions for North cape:
+B_north <-  bs_bbase_t(north_cape_data_grid$Age,
+                       xl = min(data$Age),
+                       xr = max(data$Age),
+                       spline_nseg_t = 20,
+                       data = data
+)
+reg_north_grids <- matrix(NA, nrow = nrow(north_cape_data_grid),ncol = nrow(b_post_r))
+for (i in 1: nrow(b_post_r)){
+  reg_north_grids[,i] <-B_north %*% b_post_r[i,]
+}
+reg_north_df <- data.frame(pred = rowMeans(reg_north_grids),
+                           lwr = apply(reg_north_grids,1,quantile, probs = 0.025),# check if its 1 or 2
+                           upr = apply(reg_north_grids,1,quantile, probs = 0.975),# check if its 1 or 2
+                           north_cape_data_grid,
+                           ID = "North")
+# New basis functions for South cape:
+B_south <-  bs_bbase_t(south_cape_data_grid$Age,
+                       xl = min(data$Age),
+                       xr = max(data$Age),
+                       spline_nseg_t = 20,
+                       data = data
+)
+
+reg_south_grids <- matrix(NA, nrow = nrow(south_cape_data_grid),ncol = nrow(b_post_r))
+for (i in 1: nrow(b_post_r)){
+  reg_south_grids[,i] <-B_south %*% b_post_r[i,]
+}
+reg_south_df <- data.frame(pred = rowMeans(reg_south_grids),
+                           south_cape_data_grid,
+                           lwr = apply(reg_south_grids,1,quantile, probs = 0.025),# check if its 1 or 2
+                           upr = apply(reg_south_grids,1,quantile, probs = 0.975),# check if its 1 or 2
+                           ID = "South")
+
+
+
+
+# Regional component analysis ----------
+# Divide SL curve by Coriolis parameter: f =  -sin(latitude)--???
+#reg_south_df <- reg_south_df %>% mutate(pred = pred/(-sin(Latitude)))
+#reg_north_df <- reg_north_df %>% mutate(pred = pred/(-sin(Latitude)))
+
+# North component filter for comparable years with the South
+reg_north_years <- reg_north_df$Age %>% unique()
+reg_south_years <- reg_south_df$Age %>%  unique()
+compare_years <- intersect(reg_north_years,reg_south_years)
+
+# North Component
+reg_north <- reg_north_df %>% 
+  filter(Age %in%compare_years) %>% 
+  dplyr::select(!c(Longitude,Latitude,SiteName,linear_rate,linear_rate_err))
+reg_south <- reg_south_df %>% filter(Age %in%compare_years) %>% 
+  dplyr::select(!c(Longitude,Latitude,SiteName,linear_rate,linear_rate_err))
+
+# North - South component:
+reg_north_minus_south <- data.frame(Age = compare_years,
+                                  pred= unique(reg_north$pred) - unique(reg_south$pred),
+                                  lwr = unique(reg_north$lwr) - unique(reg_south$lwr),
+                                  upr= unique(reg_north$upr) - unique(reg_south$upr),
+                                  ID = "North - South")
+
+# South component * -1
+reg_south_minus1 <- reg_south %>% mutate(pred = pred*-1,
+                                       lwr = lwr*-1,
+                                       upr = upr*-1,
+                                       ID = "- South")#: European dataset
+
+# Plot North - South, North & -South reg components
+plot_result <-
+  ggplot2::ggplot() +
+  ggplot2::geom_line(
+    data = reg_north,
+    ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  ) +
+  ggplot2::geom_ribbon(
+    data = reg_north,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),#"95"),
+    alpha = 0.2
+  ) +
+  ggplot2::geom_line(
+    data = reg_south_minus1,
+    ggplot2::aes(x = Age , y = pred, colour = ID)#"mean")
+  ) +
+  ggplot2::geom_ribbon(
+    data = reg_south_minus1,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age, fill = ID),#"95"),
+    alpha = 0.2
+  ) +
+  ggplot2::geom_line(
+    data = reg_north_minus_south,
+    ggplot2::aes(x = Age , y = pred, colour = ID)#"mean")
+  ) +
+  ggplot2::geom_ribbon(
+    data = reg_north_minus_south,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age, fill = ID),#"95"),
+    alpha = 0.2
+  ) +
+  ggplot2::xlab("Year (CE)") +
+  ggplot2::ylab("Sea Level (m)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size = 15),
+    axis.title = ggplot2::element_text(size = 12, face = "bold"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 10)
+  ) +
+  ggplot2::theme(
+    strip.text.x = ggplot2::element_text(size = 10),
+    strip.background = ggplot2::element_rect(fill = c("white"))
+  ) +
+  ggplot2::theme(legend.box = "horizontal", legend.position = "bottom") +
+  ggplot2::labs(colour = "")
+plot_result
+ggsave(plot_result, filename = "fig/North_minus_South_reg_post_samples.pdf",height= 7, width = 10)
+ 
+
+
+
+
+

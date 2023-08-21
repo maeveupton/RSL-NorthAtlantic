@@ -1,0 +1,56 @@
+model {
+  # No noise for ni_gam_decomp
+  for (i in 1:n_obs) {
+    # Main likelihood
+    y[i] ~ dnorm(mu_y[i], sigmasq_all[i]^-1)
+    sigmasq_all[i] <- sigma_y^2 + y_err[i]^2
+    
+    # Mean structure: section[i]: E/W identifier
+    r[i] <- B_r[i,] %*% b_r[section[i],]
+    # Mean
+    mu_y[i] <- c[i] + r[i] + g_z_x[i] + h_z_x[i] 
+    
+    
+    # Site specific vertical offset
+    h_z_x[i] <- intercept[site[i]]
+    
+    # Linear Local component
+    g_z_x[i] <- t[i] * b_g[site[i]]
+    
+    # Linear Local component + Site specific vertical offset
+    g_h_z_x[i] <- h_z_x[i] + g_z_x[i]
+    
+
+  }
+  # Informed Common component
+  c <- B_c %*% b_c
+  for(k in 1:n_knots_c){
+    b_c[k] ~ dnorm(b_c_value[k], b_c_sd_value[k]^-2)
+  }
+  
+  # Regional Component
+  for (s in 1:n_section) {
+    sigma_beta_r[s]~ dt(sigma_beta_r_world, 1, 1)T(0,) # Cauchy prior for sd
+    for(j in 1:n_knots_r){
+        b_r[s,j] ~ dnorm(0, sigma_beta_r[s]^-2)
+      }
+  }
+
+  # Center the site variance on a combined 'world' variance
+  sigma_beta_r_world ~ dt(0, 2^-2, 1)T(0,) 
+  
+  # Prior on intercept
+  for (j in 1:n_sites) {
+    intercept[j] ~ dnorm(h_value[j], h_sd_value[j]^-2)
+  }
+
+  # Linear Local component
+  for (j in 1:n_sites) {
+    b_g[j] ~ dnorm(linear_rate[j], linear_rate_err[j]^-2)
+  }
+  
+
+  # Priors
+  sigma_y ~ dt(0, 1^-2, 1)T(0,) 
+  
+}

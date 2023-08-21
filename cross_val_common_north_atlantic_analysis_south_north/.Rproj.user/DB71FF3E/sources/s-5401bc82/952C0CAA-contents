@@ -1,0 +1,389 @@
+# Examining patterns of RSL change along the east America coastline
+
+# Compare east (east American sites) and west (European sites) coasts of the east America 
+# Using separate models
+
+# Using Andy's updated dataframe
+# Implementation using the reslr package
+
+# Clear workspace
+rm(list = ls())
+#---------Set working directory--------------
+setwd("/users/research/mupton/3. RSL_North_Atlantic/north_atlantic_east_west")
+#----------Load packages--------------------
+library(devtools)
+#install_github("maeveupton/reslr", force = TRUE)
+library(reslr)
+library(tidyverse)
+library(ggplot2)
+library(ggtext)# for the map
+library(geosphere) #distm
+library("rnaturalearth")#n_states for map
+library(ggrepel)# labels_repel
+library(ggspatial)# annotation_scale
+library(xtable)# Writing latex tables of results
+library(cowplot)# joining plots together
+
+
+# R functions-------
+source("R/plot_data.R")# Plotting separate east & west data
+source("R/internal_functions.R")# New basis functions for east & west data
+
+# Read in Andy's updated data:
+global_data <- read_csv("https://www.dropbox.com/s/kqv3o10dnnbx38w/CommonEra2023_new.csv?dl=1")
+colnames(global_data)<- c("Basin","Region","Site","Reference","Indicator",
+                          "Latitude","Longitude","RSL","RSL_err_upr","RSL_err_lwr","Age","Age_2_err_upr","Age_2_err_lwr")
+# Updating the column names:
+global_df <- global_data %>% 
+  group_by(Site) %>% 
+  mutate(RSL_err = (RSL_err_upr + RSL_err_lwr)/2,
+         Age_err = ((Age_2_err_upr/2) + (Age_2_err_lwr/2))/2) %>% 
+  # Only looking at Common era
+  filter(Age >= 0) 
+
+# Selecting North Atlantic data
+SL_df <- global_df %>%
+  filter(Basin == "North Atlantic") 
+
+# Removing Spain as it is problem with linear rate
+SL_df <- SL_df %>%
+  dplyr::filter(!Region == "Norway") %>% 
+  dplyr::filter(!Site %in% c("Muskiz Estuary","Plentzia Estuary")) 
+
+
+
+# Remove index points
+SL_df <- SL_df %>%
+  dplyr::group_by(Site)%>%
+  dplyr::filter(dplyr::n()>2) %>%
+  # Combine Sand Point Russian & VC
+  mutate(Site = replace(Site, Site == "Sand Point Russian", "Sand Point")) %>%
+  mutate(Site = replace(Site, Site == "Sand Point VC", "Sand Point"))
+
+
+# Splitting the Atlantic coast of North America vs Other side of Atlantic:
+SL_df <- SL_df %>%
+  mutate(section_id = ifelse(Longitude<-40 & Latitude <53,"East","West"))
+
+# Other atlantic sites--------------
+# other_atlantic_sites <- SL_df %>% filter(Region %in% c("Greenland","Ireland","Scotland",'Iceland',
+#                                                        "South West England","Isle of Wight","Spain"))
+# other_atlantic_sites <- SL_df %>% filter(section_id == "West"))
+
+
+# West Sites--------------------------------
+SL_df_west <- SL_df %>% filter(section_id == "West")
+SL_df_west_reslr <- reslr_load(data = SL_df_west,
+                                          include_tide_gauge = FALSE,
+                                          include_linear_rate = TRUE)
+                                          #all_TG_1deg = TRUE,
+                                          #TG_minimum_dist_proxy = TRUE)
+#saveRDS(other_atlantic_sites_reslr,file = "reslr_inputs/other_atlantic_sites_reslr_TG_LR.rds")
+#saveRDS(SL_df_west_reslr,file = "reslr_inputs/west_reslr_no_TG_LR.rds")
+#SL_df_west_reslr <- readRDS("reslr_inputs/west_reslr_no_TG_LR.rds")
+
+# Plotting the raw data
+raw_plot_west <- plot(SL_df_west_reslr)
+#ggsave(raw_plot_other,filename = "fig/separate_mod_runs/raw_plot_other_sites.pdf", width = 10, height = 6)
+#ggsave(raw_plot_west,filename = "fig/separate_mod_runs/raw_plot_west_no_tg.pdf", width = 10, height = 6)
+
+# Run mcmc--
+#SL_df_west_reslr_output <- reslr_mcmc(SL_df_west_reslr,
+#                               model_type = "ni_gam_decomp")
+# saveRDS(other_atlantic_sites_reslr_output,file = "reslr_outputs/other_atlantic_sites_reslr_output.rds")
+#reslr_output <- readRDS(file = "reslr_outputs/other_atlantic_sites_reslr_output.rds")
+
+#saveRDS(SL_df_west_reslr_output,file = "reslr_outputs/west_reslr_output_no_TG.rds")
+#SL_df_west_reslr_output <- readRDS(file = "reslr_outputs/west_reslr_output_no_TG.rds")
+
+
+
+# East sites-----------------------------
+SL_df_east <- SL_df %>% filter(section_id == "East")
+#us_atlantic_site <- anti_join(SL_df,other_atlantic_sites)
+
+east_reslr <- reslr_load(data = SL_df_east,
+                             include_tide_gauge = FALSE,
+                             include_linear_rate = TRUE)
+                             #all_TG_1deg = TRUE,
+                             #TG_minimum_dist_proxy = TRUE)
+# saveRDS(us_atlantic_site_reslr,file = "reslr_inputs/us_atlantic_site_reslr_TG_LR.rds")
+#us_atlantic_site_reslr <- readRDS("reslr_inputs/us_atlantic_site_reslr_TG_LR.rds")
+#saveRDS(east_reslr,file = "reslr_inputs/east_reslr_no_TG_LR.rds")
+#east_reslr <- readRDS("reslr_inputs/east_reslr_no_TG_LR.rds")
+
+
+
+# Plotting the raw data
+raw_plot_east <- plot(east_reslr)
+#ggsave(raw_plot_us,filename = "fig/separate_mod_runs/raw_plot_us_sites.pdf", width = 10, height = 6)
+#ggsave(raw_plot_east,filename = "fig/separate_mod_runs/raw_plot_east_no_tg.pdf", width = 10, height = 6)
+
+# Run mcmc
+#east_reslr_output <- reslr_mcmc(east_reslr,
+#                               model_type = "ni_gam_decomp")
+# saveRDS(us_atlantic_site_reslr_output,file = "reslr_outputs/us_atlantic_site_reslr_output.rds")
+#saveRDS(east_reslr_output,file = "reslr_outputs/east_reslr_output_no_TG.rds")
+
+
+
+# Examining outputs-------------------------
+
+# East coast of north atlantic:
+#reslr_output_east <- readRDS("reslr_outputs/us_atlantic_site_reslr_output.rds")
+reslr_output_east <- readRDS("reslr_outputs/east_reslr_output_no_TG.rds")
+data_grid_east <- reslr_output_east$data_grid %>% mutate(section_id = "East")
+r_pred_post_east_full <- reslr_output_east$noisy_model_run_output$BUGSoutput$sims.list$r_pred
+r_post_east_full <- reslr_output_east$noisy_model_run_output$BUGSoutput$sims.list$r
+# Label the columns with the year values for east
+colnames(r_pred_post_east_full) <- data_grid_east$Age
+# Get rid of duplicated years from the columns
+dupl_names_east <- duplicated(colnames(r_pred_post_east_full))
+r_post_east <- r_pred_post_east_full[,!dupl_names_east]
+r_post_east_df <- data.frame(pred = colMeans(r_post_east),
+                             lwr = apply(r_post_east,2,quantile, probs = 0.025),
+                             upr = apply(r_post_east,2,quantile, probs = 0.975),
+                             Age = as.numeric(colnames(as.data.frame(r_post_east))),
+                             #Age = unique(data_east_grid$Age),
+                             ID = "East")
+
+
+# West coast of north atlantic
+#reslr_output_west <- readRDS("reslr_outputs/other_atlantic_sites_reslr_output.rds")
+reslr_output_west <- readRDS("reslr_outputs/west_reslr_output_no_TG.rds")
+data_grid_west <- reslr_output_west$data_grid %>% mutate(section_id = "West")
+r_pred_post_west_full <- reslr_output_west$noisy_model_run_output$BUGSoutput$sims.list$r_pred
+# Label the columns with the year values for west
+colnames(r_pred_post_west_full) <- data_grid_west$Age
+# Get rid of duplicated years from the columns
+dupl_names_west <- duplicated(colnames(r_pred_post_west_full))
+r_post_west <- r_pred_post_west_full[,!dupl_names_west]
+r_post_west_df <- data.frame(pred = colMeans(r_post_west),
+                             lwr = apply(r_post_west,2,quantile, probs = 0.025),
+                             upr = apply(r_post_west,2,quantile, probs = 0.975),
+                             Age = as.numeric(colnames(as.data.frame(r_post_west))),
+                             #Age = unique(data_west_grid$Age),
+                             ID = "West")
+# # East minus west---------
+# # Making east sample df into long form
+# r_post_east_long <- as_tibble(r_post_east) %>% 
+#                       tidyr::pivot_longer(`3`:`2023`,
+#                                           names_to = "year",
+#                                           values_to = "rsl_east") %>% 
+#                       mutate(year = as.numeric(year))
+# 
+# # Making west sample df into long form
+# r_post_west_long <- as_tibble(r_post_west) %>% 
+#   tidyr::pivot_longer(`3`:`2023`,
+#                       names_to = "year",
+#                       values_to = "rsl_west") %>% 
+#   mutate(year = as.numeric(year))
+
+
+# East minus west for No tide gauges---------
+# Making east sample df into long form
+r_post_east_long <- as_tibble(r_post_east) %>% 
+  tidyr::pivot_longer(`3`:`2015`,
+                      names_to = "year",
+                      values_to = "rsl_east") %>% 
+  mutate(year = as.numeric(year))
+
+# Making west sample df into long form
+r_post_west_long <- as_tibble(r_post_west) %>% 
+  tidyr::pivot_longer(`3`:`2010.5`,
+                      names_to = "year",
+                      values_to = "rsl_west") %>% 
+  mutate(year = as.numeric(year))
+
+# Checking for overlapping years
+years_compare <- intersect(r_post_west_long$year,r_post_east_long$year)
+# Removing these years from both east
+r_post_east_long_filter <- r_post_east_long %>% filter(year %in% years_compare)
+# and west
+r_post_west_long_filter <- r_post_west_long %>% filter(year %in% years_compare)
+
+# Final posterior sample df 
+r_post_long_df <- data.frame(rsl_west =  r_post_west_long_filter$rsl_west,
+                                rsl_east =  r_post_east_long_filter$rsl_east,
+                                year =  r_post_east_long_filter$year)
+
+r_post_all_long_diff <-r_post_long_df %>% 
+  mutate(rsl_diff = rsl_east - rsl_west) %>% 
+  dplyr::select(year,rsl_diff) %>% arrange(year)
+
+r_post_all_wide_diff <- r_post_all_long_diff %>%
+  group_by(year) %>% 
+  mutate(row = row_number()) %>%
+  pivot_wider(.,names_from = year,
+              values_from = rsl_diff) %>% 
+  dplyr::select(-row)
+  
+r_post_east_west_df <- data.frame(pred = colMeans(r_post_all_wide_diff),
+                                             lwr = apply(r_post_all_wide_diff,2,quantile, probs = 0.025),# check if its 1 or 2
+                                             upr = apply(r_post_all_wide_diff,2,quantile, probs = 0.975),# check if its 1 or 2
+                                              Age = unique(r_post_all_long_diff$year),
+                                             ID = "East-West")
+
+
+
+
+# Minus West data 
+r_post_minus_west_df <- r_post_west_df %>% 
+  mutate(pred = pred*-1,
+         lwr = lwr*-1,
+         upr = upr*-1,
+           ID = "- West")
+
+# Comparing East and West regional components:
+plot_east_west <-
+  ggplot2::ggplot() +
+  # West
+  ggplot2::geom_line(
+    data = r_post_west_df,
+    ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  ) +
+  ggplot2::geom_ribbon(
+    data = r_post_west_df,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),#"95"),
+    alpha = 0.2
+  ) +
+  # East
+  ggplot2::geom_line(
+    data = r_post_east_df,
+    ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  ) +
+  ggplot2::geom_ribbon(
+    data = r_post_east_df,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),#"95"),
+    alpha = 0.2
+  ) +
+  # #East - West
+  # ggplot2::geom_ribbon(
+  #   data = r_post_east_west_df,
+  #   ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),
+  #   alpha = 0.4
+  # ) +
+  # ggplot2::geom_line(
+  #   data = r_post_east_west_df,
+  #   ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  # ) +
+  ggplot2::xlab("Year (CE)") +
+  ggplot2::ylab("Sea Level (m)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size = 15),
+    axis.title = ggplot2::element_text(size = 12, face = "bold"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 10)
+  ) +
+  ggplot2::theme(
+    strip.text.x = ggplot2::element_text(size = 10),
+    strip.background = ggplot2::element_rect(fill = c("white"))
+  ) +
+  #ggplot2::theme(legend.box = "horizontal", legend.position = "bottom") +
+  ggplot2::labs(colour = "",fill = "") +
+  scale_fill_manual(values = c("blue","green4","red"))+
+  scale_colour_manual(values =c("blue","green4","red"))
+plot_east_west
+#ggsave(plot_east_west, filename = "fig/separate_mod_runs/reg_east_west_tg.pdf",height= 7, width = 10)
+ggsave(plot_east_west, filename = "fig/separate_mod_runs/reg_east_west_no_tg.pdf",height= 7, width = 10)
+
+
+# Putting grey highlight between 1350 to 1550
+age_rect <- data.frame(xstart = 1390,
+                       xend = 1500)
+#r_post_east_west_df %>% slice_max(pred) # 1403
+plot_east_west_minus_grey <-
+  ggplot2::ggplot() +
+  # Minus West
+  # ggplot2::geom_line(
+  #   data = r_post_west_df,
+  #   ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  # ) +
+  # ggplot2::geom_ribbon(
+  #   data = r_post_west_df,
+  #   ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),#"95"),
+  #   alpha = 0.2
+  # ) +
+  # # East
+  # ggplot2::geom_line(
+  #   data = r_post_east_df,
+  #   ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  # ) +
+  # ggplot2::geom_ribbon(
+  #   data = r_post_east_df,
+  #   ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),#"95"),
+  #   alpha = 0.2
+  # ) +
+  #East - West
+  ggplot2::geom_ribbon(
+    data = r_post_east_west_df,
+    ggplot2::aes(y = pred, ymin = lwr, ymax = upr, x = Age , fill = ID),
+    alpha = 0.4
+  ) +
+  ggplot2::geom_line(
+    data = r_post_east_west_df,
+    ggplot2::aes(x = Age, y = pred, colour = ID)#colour = "mean")
+  ) +
+  ggplot2::xlab("Year (CE)") +
+  ggplot2::ylab("Sea Level (m)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size = 15),
+    axis.title = ggplot2::element_text(size = 12, face = "bold"),
+    axis.text = ggplot2::element_text(size = 12),
+    legend.text = ggplot2::element_text(size = 10)
+  ) +
+  ggplot2::theme(
+    strip.text.x = ggplot2::element_text(size = 10),
+    strip.background = ggplot2::element_rect(fill = c("white"))
+  ) +
+  #ggplot2::theme(legend.box = "horizontal", legend.position = "bottom") +
+  ggplot2::labs(colour = "",fill = "") +
+  scale_fill_manual(values = c("red"))+
+  scale_colour_manual(values =c("red"))+
+  geom_rect(data = age_rect, aes(xmin = xstart, 
+                             xmax = xend, ymin = -Inf, 
+                              ymax = Inf),colour = "grey", alpha = 0.4)
+plot_east_west_minus_grey
+ggsave(plot_east_west_minus_grey, filename = "fig/separate_mod_runs/reg_east_minus_west_no_tg.pdf",height= 7, width = 10)
+
+
+# Joining the East West plot with the East - West plots together vertically:
+compare_plot_east_west <- plot_grid(plot_east_west, plot_east_west_minus_grey,ncol = 1,align = "hv")
+#ggsave(compare_plot,filename = "fig/separate_mod_runs/east_west_minus_no_tg.pdf",height = 6,width = 10)
+ggsave(compare_plot_east_west,filename = "fig/separate_mod_runs/compare_east_west_minus_no_tg.pdf",height = 6,width = 10)
+
+# Ramhsoft 2015 data:
+rahm_df <- read.csv("https://www.dropbox.com/s/t9gbld343tf2fcx/rahmsoft2015.csv?dl=1")
+# y is an amoc index
+names(rahm_df) <- c("year","Amoc","2sigma","lower","upper","ID")
+#rahm_df %>% slice_max(Amoc) # 1471
+rahm2015_plot <- 
+  ggplot()+
+  #geom_line(data = caesar_df, aes(x = year, y = y,colour = ID))+
+  #geom_ribbon(data = caesar_df,
+  #            aes(x = year,ymax = lower,ymin = upper,colour = ID),alpha = 0.4)+
+  geom_line(data = rahm_df, aes(x = year, y = Amoc,colour = ID))+
+  geom_ribbon(data = rahm_df,
+              aes(x = year,ymax = lower,ymin = upper,fill = ID),alpha = 0.4)+
+  labs(x = "Year (CE)", y = "Temperature anomaly (K)",colour = "",fill = "")+
+  theme_bw()+
+  scale_x_continuous(limits = c(0,2023))+
+  scale_fill_manual(values = "purple")+
+  scale_colour_manual(values = "purple")+
+  geom_rect(data = age_rect, aes(xmin = xstart, 
+                                 xmax = xend, ymin = -Inf, 
+                                 ymax = Inf),colour = "grey", alpha = 0.4)
+rahm2015_plot
+
+
+# Joining the plots together vertically:
+compare_plot <- plot_grid(plot_east_west_minus_grey, rahm2015_plot,ncol = 1,align = "hv")
+#ggsave(compare_plot,filename = "fig/compare_proxy_data/east_west_rahm2015.pdf",height = 6,width = 10)
+ggsave(compare_plot,filename = "fig/compare_proxy_data/east_west_no_tg_rahm2015.pdf",height = 6,width = 10)
+
+
+
+
+
