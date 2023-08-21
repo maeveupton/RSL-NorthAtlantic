@@ -1,0 +1,90 @@
+# New approach for Global RSL analysis
+
+# f(x,t) = c(t) + r(t) + gt + l(x,t) + Error
+# Model 1: Fit the global/common trend in just time
+# Model 2: Fit the regional component with fixed priors from previous run
+# Model 3: Strong priors on both common, regional and estimate the non-linear local component
+
+
+# Data from Andy's updated data
+# Clear workspace
+rm(list = ls())
+#---------Set working directory--------------
+setwd("/users/research/mupton/3. RSL_North_Atlantic/global_north_atlantic_analysis")
+#----------Load packages--------------------
+library(devtools)
+install_github("maeveupton/reslr", force = TRUE)
+library(reslr)
+library(tidyverse)
+library(ggplot2)
+remotes::install_github("tidyverse/purrr")
+library(geosphere) #distm
+library("rnaturalearth")#n_states for map
+library(ggtext)# for the map
+library(ggrepel)# labels_repel
+library(ggspatial)# annotation_scale
+library(readr)# read csv file
+# R functions-------
+source("R/plot_data.R")# Plotting separate east & west data & map plot
+source("R/internal_functions.R")# New basis functions for east & west data
+source("R/reslr_mcmc_fun.R")# New basis functions for east & west data
+
+
+# Read in Andy's updated data:
+global_data <- read_csv("https://www.dropbox.com/s/kqv3o10dnnbx38w/CommonEra2023_new.csv?dl=1")
+colnames(global_data)<- c("Basin","Region","Site","Reference","Indicator",
+                          "Latitude","Longitude","RSL","RSL_err_upr","RSL_err_lwr","Age","Age_2_err_upr","Age_2_err_lwr")
+# Updating the column names:
+global_df <- global_data %>% 
+  mutate(RSL_err = (RSL_err_upr + RSL_err_lwr)/2,
+         Age_err = ((Age_2_err_upr/2) + (Age_2_err_lwr/2))/2) %>% 
+  # Only looking at Common era
+  filter(Age >= 0) %>% 
+  # No data before 1800
+  filter(!Site %in% c("Muskiz Estuary","Plentzia Estuary",
+                      "Little Swanport", "Storosen",
+                     "Lutregala",   
+                     "Wapengo","Tarra" )) %>% 
+  # Combine Sand Point Russian & VC
+  mutate(Site = replace(Site, Site == "Sand Point Russian", "Sand Point")) %>%
+  mutate(Site = replace(Site, Site == "Sand Point VC", "Sand Point")) %>% 
+  # Removing sites with less than 2 points
+  group_by(Site) %>% 
+  filter(dplyr::n()>5) 
+  
+# Load in data to reslr:
+global_input <- reslr_load(global_df,
+                           include_linear_rate = TRUE,
+                           include_tide_gauge = TRUE,
+                           TG_minimum_dist_proxy = TRUE,
+                           all_TG_1deg = TRUE)
+saveRDS(global_input,file = "reslr_inputs/global_input_TG_LR.rds")
+global_input <- readRDS("reslr_inputs/global_input_TG_LR.rds")
+
+# Mapping the data:
+plot_map(data = global_input$data)
+
+data <- global_input$data
+data_grid <- global_input$data_grid
+# Running the ni-gam using updated reslr code------------------
+global_output <-
+  reslr_mcmc_fun(
+    data = data,
+    data_grid = data_grid,
+    n_iterations = 5000,
+    n_burnin = 1000,
+    n_thin = 4,
+    n_chains = 3,
+    spline_nseg_t = 20,
+    spline_nseg_st = 6
+  )
+saveRDS(north_at_reslr_out,file = "reslr_outputs/global_reslr_output_new_JAGS.rds")
+
+#global_output <- readRDS("reslr_outputs/global_reslr_output_new_JAGS.rds")
+
+
+# Plot outputs:
+# reg_plot <- plot(global_output,plot_type = "regional_plot")
+# ggsave(reg_plot,filename = "fig/reg_global_all_sites.pdf", width = 10, height = 6)
+# reg_rate_plot <- plot(global_output,plot_type = "regional_rate_plot")
+# ggsave(reg_rate_plot,filename = "fig/reg_rate_global_all_sites.pdf", width = 10, height = 6)
