@@ -98,8 +98,8 @@ input_gia_data <-
          Region = ifelse(is.na(Region) == TRUE, "",Region),
          Reference = ifelse(is.na(Reference) == TRUE, "PSMSL database", Reference),
          SiteName = as.character(SiteName),
-        Site = ifelse(is.na(Site) == TRUE,SiteName,Site),
-        SiteName = as.factor(SiteName))
+         Site = ifelse(is.na(Site) == TRUE,SiteName,Site),
+         SiteName = as.factor(SiteName))
 
 
 # Running cross validation for just proxy records------------------
