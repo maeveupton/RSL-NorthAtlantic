@@ -179,19 +179,19 @@ data_grid <- rbind(east_data_grid, west_data_grid)
 #       include.colnames = FALSE)
 
 ## Running the ni-gam using updated reslr code------------------
-global_output <-
-  reslr_mcmc_fun(
-    data = data,
-    data_grid = data_grid,
-    n_iterations = 8000,
-    n_burnin = 1000,
-    n_thin = 5,
-    n_chains = 2,
-    spline_nseg_t = 8,
-    spline_nseg_st = 6,
-    spline_nseg_c = 20
-  )
-saveRDS(global_output,file = "reslr_outputs/full_dataset/global_reslr_output.rds")
+# global_output <-
+#   reslr_mcmc_fun(
+#     data = data,
+#     data_grid = data_grid,
+#     n_iterations = 8000,
+#     n_burnin = 1000,
+#     n_thin = 5,
+#     n_chains = 2,
+#     spline_nseg_t = 8,
+#     spline_nseg_st = 6,
+#     spline_nseg_c = 20
+#   )
+# saveRDS(global_output,file = "reslr_outputs/full_dataset/global_reslr_output.rds")
 global_output <- readRDS("reslr_outputs/full_dataset/global_reslr_output.rds")
 
 # Total model fit
@@ -199,11 +199,11 @@ data_grid <-  global_output$data_grid
 data <- global_output$data
 tot_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$mu_pred
 tot_post_df_full <- data.frame(pred = colMeans(tot_pred_post_full),
-                        lwr = apply(tot_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(tot_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.75),
-                        data_grid)
+                               lwr = apply(tot_pred_post_full,2,quantile, probs = 0.025),
+                               upr = apply(tot_pred_post_full,2,quantile, probs = 0.975),
+                               lwr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.25),
+                               upr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.75),
+                               data_grid)
 tot_post_df <- tot_post_df_full %>% filter(data_type_id == "ProxyRecord")
 data <- data %>% filter(data_type_id == "ProxyRecord")
 tot_plot <-
@@ -268,11 +268,11 @@ ggsave(tot_plot,filename = "fig/full_dataset/tot_mod_fit.pdf", width = 10, heigh
 # Rate of change for Common Component
 tot_pred_rate_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$mu_pred_deriv
 tot_rate_post_df_full <- data.frame(pred = colMeans(tot_pred_rate_post_full),
-                             lwr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.025),
-                             upr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.75),
-                             data_grid)
+                                    lwr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.025),
+                                    upr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.975),
+                                    lwr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.25),
+                                    upr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.75),
+                                    data_grid)
 tot_rate_post_df <- tot_rate_post_df_full %>% filter(data_type_id == "ProxyRecord")
 
 tot_rate_plot <- ggplot(data = tot_rate_post_df, aes(x = Age, y = pred))+
@@ -347,7 +347,7 @@ c_plot <-
                              ),
                              labels = c(
                                CI = "50% & 95% Credible Interval")
-                             )+
+  )+
   ggplot2::scale_colour_manual("",
                                values = c(
                                  "mean" = "brown2"
@@ -430,11 +430,11 @@ ggsave(c_rate_plot,filename = "fig/full_dataset/common_rate.pdf", width = 10, he
 # Non Lin Local Component
 local_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$l_pred
 l_post_df_full <- data.frame(pred = colMeans(local_pred_post_full),
-                        lwr = apply(local_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(local_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(local_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(local_pred_post_full,2,quantile, probs = 0.75),
-                        data_grid)
+                             lwr = apply(local_pred_post_full,2,quantile, probs = 0.025),
+                             upr = apply(local_pred_post_full,2,quantile, probs = 0.975),
+                             lwr_50 = apply(local_pred_post_full,2,quantile, probs = 0.25),
+                             upr_50 = apply(local_pred_post_full,2,quantile, probs = 0.75),
+                             data_grid)
 l_post_df <- l_post_df_full %>% filter(data_type_id == "ProxyRecord")
 l_plot <- ggplot()+
   geom_line(data = l_post_df, aes(x = Age, y = pred,colour = "mean"))+
@@ -486,11 +486,11 @@ ggsave(l_plot,filename = "fig/full_dataset/non_lin_loc.pdf", width = 10, height 
 # Rate of change of Non Lin Local Component
 local_pred_rate_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$l_pred_deriv
 l_post_rate_df_full <- data.frame(pred = colMeans(local_pred_rate_post_full),
-                             lwr = apply(local_pred_rate_post_full,2,quantile, probs = 0.025),
-                             upr = apply(local_pred_rate_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.75),
-                             data_grid)
+                                  lwr = apply(local_pred_rate_post_full,2,quantile, probs = 0.025),
+                                  upr = apply(local_pred_rate_post_full,2,quantile, probs = 0.975),
+                                  lwr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.25),
+                                  upr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.75),
+                                  data_grid)
 l_post_rate_df <- l_post_rate_df_full %>% filter(data_type_id == "ProxyRecord")
 l_rate_plot <- ggplot()+
   geom_line(data = l_post_rate_df, aes(x = Age, y = pred,colour = "mean"))+
@@ -543,11 +543,11 @@ ggsave(l_rate_plot,filename = "fig/full_dataset/non_lin_loc_rate.pdf", width = 1
 # Lin Local Component
 lin_gia_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$g_h_z_x_pred
 l_gia_post_df_full <- data.frame(pred = colMeans(lin_gia_pred_post_full),
-                             lwr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.025),
-                             upr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.75),
-                             data_grid)
+                                 lwr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.025),
+                                 upr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.975),
+                                 lwr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.25),
+                                 upr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.75),
+                                 data_grid)
 l_gia_post_df <- l_gia_post_df_full %>% filter(data_type_id == "ProxyRecord")
 l_gia_plot <- ggplot()+
   geom_line(data = l_gia_post_df, aes(x = Age, y = pred,colour = "mean"))+
@@ -614,7 +614,7 @@ reg_plot <- ggplot(data = r_post_df, aes(x = Age, y = pred))+
   theme_bw()+
   ggplot2::scale_colour_manual("",
                                values = c("deepskyblue2","blue4")
-                               ) +
+  ) +
   ggplot2::guides(
     fill = ggplot2::guide_legend(override.aes = list(
       alpha = c(0.2), # , 0.4),
@@ -632,18 +632,18 @@ reg_plot <- ggplot(data = r_post_df, aes(x = Age, y = pred))+
   ) +
   ggplot2::scale_fill_manual("",
                              values = c("deepskyblue2","blue4")
-                             )
+  )
 ggsave(reg_plot,filename = "fig/full_dataset/reg_east_west_eastonly.pdf", width = 10, height = 6)
 
 
 # Rate of change Regional component
 r_rate_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$r_pred_deriv
 r_rate_post_df <- data.frame(pred = colMeans(r_rate_pred_post_full),
-                        lwr = apply(r_rate_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(r_rate_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.75),
-                        data_grid)
+                             lwr = apply(r_rate_pred_post_full,2,quantile, probs = 0.025),
+                             upr = apply(r_rate_pred_post_full,2,quantile, probs = 0.975),
+                             lwr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.25),
+                             upr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.75),
+                             data_grid)
 view(r_rate_post_df %>% filter(section == "East"))
 reg_rate_plot <- ggplot(data = r_rate_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = section))+
@@ -679,11 +679,11 @@ ggsave(reg_rate_plot,filename = "fig/full_dataset/rate_reg_east_west.pdf", width
 # Difference Regional Rate component
 diff_r_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$diff_r_pred
 diff_r_post_df <- data.frame(pred = colMeans(diff_r_pred_post_full),
-                        lwr = apply(diff_r_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(diff_r_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.75),
-                        data_grid)
+                             lwr = apply(diff_r_pred_post_full,2,quantile, probs = 0.025),
+                             upr = apply(diff_r_pred_post_full,2,quantile, probs = 0.975),
+                             lwr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.25),
+                             upr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.75),
+                             data_grid)
 diff_reg_plot <- ggplot(data = diff_r_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = "mean"))+
   geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
@@ -714,9 +714,10 @@ diff_reg_plot <- ggplot(data = diff_r_post_df, aes(x = Age, y = pred))+
     legend.text = ggplot2::element_text(size = 10)
   ) +
   ggplot2::scale_fill_manual("",
-                              values= c("CI"="darkmagenta"),
+                             values= c("CI"="darkmagenta"),
                              labels = "50% & 95% Credible Interval"
-  )
+  )+
+  scale_x_continuous(minor_breaks = seq(0, 2023, 100))
 
 ggsave(diff_reg_plot,filename = "fig/full_dataset/diff_reg_east_west.pdf", width = 10, height = 6)
 
@@ -725,11 +726,11 @@ write_csv(diff_r_post_df,"Upton_reg_diff_east_west.csv")
 # # Difference Regional Rate component
 diff_r_rate_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$diff_r_pred_deriv
 diff_r_rate_post_df <- data.frame(pred = colMeans(diff_r_rate_pred_post_full),
-                             lwr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.025),
-                             upr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.75),
-                             data_grid)
+                                  lwr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.025),
+                                  upr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.975),
+                                  lwr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.25),
+                                  upr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.75),
+                                  data_grid)
 diff_reg_rate_plot <- ggplot(data = diff_r_rate_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = "mean"))+
   ggplot2::geom_hline(yintercept = 0) +
@@ -763,7 +764,8 @@ diff_reg_rate_plot <- ggplot(data = diff_r_rate_post_df, aes(x = Age, y = pred))
   ggplot2::scale_fill_manual("",
                              values= c("CI"="darkmagenta"),
                              labels = "50% & 95% Credible Interval"
-  )
+  )+
+  scale_x_continuous(minor_breaks = seq(0, 2023, 100))
 
 ggsave(diff_reg_rate_plot,filename = "fig/full_dataset/diff_reg_rate_east_west.pdf", width = 10, height = 6)
-
+write_csv(diff_r_rate_post_df,"Upton_rate_for_reg_diff_east_west.csv")
