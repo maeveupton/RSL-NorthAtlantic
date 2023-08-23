@@ -347,9 +347,30 @@ upton_plot <-
 upton_plot
 ggsave(upton_plot, filename = "fig/upton2023.pdf", width = 6, height = 10)
 
+# Rate of Change from Upton 2023
+upton_rate_df <- read.csv("/users/research/mupton/3. RSL_North_Atlantic/1.common_north_atlantic_analysis_east_west/Upton_rate_for_reg_diff_east_west.csv")
+upton_rate_df <- upton_rate_df %>% mutate(ID = "Upton et al. 2023")
+upton_rate_plot <-
+  ggplot() +
+  geom_line(data = upton_rate_df, aes(x = Age, y = pred, colour = ID)) +
+  geom_ribbon(
+    data = upton_rate_df,
+    aes(x = Age, ymax = upr, ymin = lwr, fill = ID), alpha = 0.4
+  ) +
+  labs(x = "Year (CE)", y = "Rate of change for East - West sea level (mm/year)", colour = "", fill = "") +
+  theme_bw() +
+  scale_x_continuous(limits = c(0, 2005)) +
+  # scale_y_continuous(limits = c(25,35))+
+  scale_fill_manual(values = ("darkmagenta")) +
+  scale_colour_manual(values = ("darkmagenta")) +
+  theme(text = element_text(size = 7))
+upton_rate_plot
+ggsave(upton_rate_plot, filename = "fig/rate_upton2023.pdf", width = 6, height = 10)
 
 # Joining the plots together vertically:
-compare_plot <- plot_grid(upton_plot,
+compare_plot <- plot_grid(
+  upton_plot,
+  upton_rate_plot,
   rahm_plot,
   thibodeau_plot,
   sherwood_both_plot,
@@ -358,17 +379,22 @@ compare_plot <- plot_grid(upton_plot,
   thornally_plot_silt1,
   ncol = 1, align = "hv"
 )
-ggsave(compare_plot, filename = "fig/compare_proxy_data.pdf", height = 15, width = 10)
+ggsave(compare_plot, filename = "fig/compare_proxy_data_new.pdf", height = 15, width = 10)
 
 
 # Put all the dataframes together with same x axis
 upton_df_update <- upton_df %>%
   dplyr::select(pred, lwr, upr, ID, Age) %>%
   rename(mean = pred, lower = lwr, upper = upr, year = Age)
+upton_rate_df_update <- upton_rate_df %>%
+  dplyr::select(pred, lwr, upr, ID, Age) %>%
+  rename(mean = pred, lower = lwr, upper = upr, year = Age)
 
 # Adding column with y label for each df
 upton_df_update <- upton_df_update %>%
   mutate(y_lab_name = "East - West Sea Level (m)")
+upton_rate_df_update <- upton_rate_df_update %>%
+  mutate(y_lab_name = "Rate of Change \n East - West Sea Level (mm/year)")
 rahm_df <- rahm_df %>%
   mutate(y_lab_name = "Temperature anomaly (K)")
 spooner_df_new <- spooner_df_new %>%
@@ -385,7 +411,8 @@ sherwood_point_df <- sherwood_point_df %>%
   mutate(y_lab_name = paste("Bulk", expression("\u03B4^15"), "N", "(%o)"))
 
 full_df <- rbind(
-  upton_df_update,
+  #upton_df_update,
+  upton_rate_df_update,
   rahm_df,
   spooner_df_new,
   thibodeau_df,
@@ -398,7 +425,8 @@ full_df <- rbind(
 
 my_plot_labs <- as_labeller(
   c(
-    "Upton et al. 2023" = "East - West Sea Level (m)",
+    #"Upton et al. 2023" = "East - West Sea Level (m)",
+    "Upton et al. 2023" = "Rate of Change \n East - West Sea Level (mm/year)",
     "Rahmstorf et al. 2015" = "Temperature anomaly (K)",
     "Spooner et al. 2020" = "Abundance of \n high productivity \n species (%)",
     "Thibodeau et al. 2018" = paste(expression("\u03B4^{18}"), "O", "\n", "MD99-2220 (%o VPDB)"),
@@ -415,11 +443,12 @@ subset_labs <- full_df %>%
 # Plotting all data together:
 all_plot <-
   ggplot() +
+  geom_vline(data = full_df,aes(xintercept = 1850),colour = "black",linetype = "dashed")+
   geom_point(data = sherwood_point_df, aes(x = year, y = mean, colour = ID)) +
   geom_errorbar(data = sherwood_point_df, aes(
     x = year, y = mean,
     ymin = lower, ymax = upper, colour = ID
-   )) +
+  )) +
   geom_errorbarh(data = sherwood_point_df, aes(
     y = mean,
     xmin = year_min, xmax = year_max, colour = ID
@@ -435,11 +464,12 @@ all_plot <-
   # scale_y_continuous(limits = c(25,35))+
   # scale_fill_manual(values = ("darkmagenta")) +
   # scale_colour_manual(values = ("darkmagenta")) +
-  theme(text = element_text(size = 7)) +
+  theme(text = element_text(size = 9),
+        legend.text=element_text(size=9)) +
   facet_wrap(ID ~ .,
-    scales = "free_y",
-    ncol = 1, # strip.position="right",
-    strip.position = "left",labeller = my_plot_labs
+             scales = "free_y",
+             ncol = 1, # strip.position="right",
+             strip.position = "left",labeller = my_plot_labs
   ) +
   theme(
     strip.background = element_blank(),
@@ -453,8 +483,9 @@ all_plot <-
   #geom_text(data = subset_labs,aes(x = 0, y = mean,label = ID,colour = ID))+
   ylab(NULL)+
   xlab("Year (CE)")+
-  labs(colour = NULL,fill = NULL)
+  labs(colour = NULL,fill = NULL)+
+  scale_x_continuous(minor_breaks = seq(0, 2023, 100))
 all_plot
-ggsave(all_plot, filename = "fig/all_plot.pdf", 
+ggsave(all_plot, filename = "fig/all_plot_new.pdf", 
        height = 15, width = 10,dpi = 1200,
        device =cairo_pdf)
