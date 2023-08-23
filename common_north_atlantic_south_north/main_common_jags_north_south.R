@@ -71,27 +71,27 @@ SL_df <- SL_df %>% filter(Region %in% c("Connecticut",
 
 # We include tide gauges for each proxy site--------------------
 north_at_reslr <- reslr_load_fun(data = SL_df,
-                             include_tide_gauge = TRUE,
-                             include_linear_rate = TRUE,
-                             list_preferred_TGs =
-                               c(
-                                 #"LAKE WORTH PIER",
-                                 "CHARLESTON I",
-                                 "FORT PULASKI",
-                                 "DAYTONA BEACH",
-                                 "WILMINGTON",
-                                 "SPRINGMAID PIER",
-                                 "NAPLES",
-                                 "FORT MYERS"),
-                             TG_minimum_dist_proxy = TRUE,
-                             prediction_grid_res = 30)
+                                 include_tide_gauge = TRUE,
+                                 include_linear_rate = TRUE,
+                                 list_preferred_TGs =
+                                   c(
+                                     #"LAKE WORTH PIER",
+                                     "CHARLESTON I",
+                                     "FORT PULASKI",
+                                     "DAYTONA BEACH",
+                                     "WILMINGTON",
+                                     "SPRINGMAID PIER",
+                                     "NAPLES",
+                                     "FORT MYERS"),
+                                 TG_minimum_dist_proxy = TRUE,
+                                 prediction_grid_res = 30)
 saveRDS(north_at_reslr,file = "reslr_inputs/north_at_reslr_TG_LR.rds")
 north_at_reslr <- readRDS("reslr_inputs/north_at_reslr_TG_LR.rds")
 
 # Setting up 2 sections for north and south cape Hatteras:
 data <- north_at_reslr$data %>%
   mutate(section = ifelse(Latitude > 35.3,"North","South"),
-        SiteName = as.character(SiteName)) %>% 
+         SiteName = as.character(SiteName)) %>% 
   mutate(SiteName = factor(SiteName))
 
 data_grid <- north_at_reslr$data_grid %>%
@@ -149,7 +149,7 @@ tot_post_df_full <- data.frame(pred = colMeans(tot_pred_post_full),
                                lwr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.25),
                                upr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.75),
                                global_output$data_grid)
-                               
+
 tot_post_df <- tot_post_df_full %>% 
   filter(data_type_id == "ProxyRecord") 
 data <- global_output$data %>% 
@@ -278,7 +278,7 @@ c_post_df <- data.frame(pred = colMeans(c_pred_post_full),
                         upr = apply(c_pred_post_full,2,quantile, probs = 0.975),
                         lwr_50 = apply(c_pred_post_full,2,quantile, probs = 0.25),
                         upr_50 = apply(c_pred_post_full,2,quantile, probs = 0.75),
-                       global_output$data_grid)
+                        global_output$data_grid)
 
 
 c_plot <-
@@ -385,7 +385,7 @@ l_post_df_full <- data.frame(pred = colMeans(local_pred_post_full),
                              lwr_50 = apply(local_pred_post_full,2,quantile, probs = 0.25),
                              upr_50 = apply(local_pred_post_full,2,quantile, probs = 0.75),
                              global_output$data_grid)
-                             #global_output$data)
+#global_output$data)
 l_post_df <- l_post_df_full %>% filter(data_type_id == "ProxyRecord")
 l_plot <- ggplot()+
   geom_line(data = l_post_df, aes(x = Age, y = pred,colour = "mean"))+
@@ -499,7 +499,7 @@ l_gia_post_df_full <- data.frame(pred = colMeans(lin_gia_pred_post_full),
                                  lwr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.25),
                                  upr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.75),
                                  global_output$data_grid)
-                                 
+
 l_gia_post_df <- l_gia_post_df_full %>% filter(data_type_id == "ProxyRecord")
 l_gia_plot <- ggplot()+
   geom_line(data = l_gia_post_df, aes(x = Age, y = pred,colour = "mean"))+
@@ -603,7 +603,7 @@ r_rate_post_df <- data.frame(pred = colMeans(r_rate_pred_post_full),
                              lwr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.25),
                              upr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.75),
                              global_output$data_grid)
-                             #global_output$data)
+#global_output$data)
 reg_rate_plot <- ggplot(data = r_rate_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = section))+
   geom_ribbon(aes(ymin = lwr,ymax=upr,fill = section),alpha = 0.2)+
@@ -643,7 +643,7 @@ diff_r_post_df <- data.frame(pred = colMeans(diff_r_pred_post_full),
                              lwr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.25),
                              upr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.75),
                              global_output$data_grid)
-                             #global_output$data)
+#global_output$data)
 diff_reg_plot <- ggplot(data = diff_r_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = "mean"))+
   geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
@@ -689,7 +689,7 @@ diff_r_rate_post_df <- data.frame(pred = colMeans(diff_r_rate_pred_post_full),
                                   lwr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.25),
                                   upr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.75),
                                   global_output$data_grid)
-                                  #global_output$data)
+#global_output$data)
 diff_reg_rate_plot <- ggplot(data = diff_r_rate_post_df, aes(x = Age, y = pred))+
   geom_line(aes(colour = "mean"))+
   ggplot2::geom_hline(yintercept = 0) +
