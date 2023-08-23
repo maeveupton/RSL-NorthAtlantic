@@ -1,6 +1,6 @@
-# New approach for RSL analysis of North South of Cape Hatteras
+# Cross validation for new approach for RSL analysis of East West of North Atlantic
 
-# f(x,t) = c(t) + r_North(t)+ r_South(t) + gt + l(x,t) + Error
+# f(x,t) = c(t) + r_east(t)+ r_west(t) + gt + l(x,t) + Error
 # Model 1: Fit the global/common trend in just time
 # Model 2: Fit the regional component with fixed priors from previous run
 # Model 3: Strong priors on both common, regional and estimate the non-linear local component
@@ -10,720 +10,249 @@
 # Clear workspace
 rm(list = ls())
 #---------Set working directory--------------
-setwd("/users/research/mupton/3. RSL_North_Atlantic/2.common_north_atlantic_analysis_north_south")
+setwd("/users/research/mupton/3. RSL_North_Atlantic/cross_val_common_north_atlantic_analysis_east_west")
 #----------Load packages--------------------
 library(devtools)
-#install_github("maeveupton/reslr", force = TRUE)
-#install.packages("reslr", dependencies = TRUE, INSTALL_opts = '--no-lock')
-#install.packages("reslr")
 library(reslr)
 library(tidyverse)
 library(ggplot2)
-#remotes::install_github("tidyverse/purrr")
-library(geosphere) #distm
-library("rnaturalearth")#n_states for map
-library(ggtext)# for the map
-library(ggrepel)# labels_repel
-library(ggspatial)# annotation_scale
-library(readr)# read csv file
+remotes::install_github("tidyverse/purrr")
+library(geosphere) # distm
+library(readr) # read csv file
+library(xtable)# Latex tables
 # R functions-------
-source("R/plot_data.R")# Plotting separate north & south data & map plot
-source("R/internal_functions.R")# New basis functions for north & south data
-source("R/reslr_mcmc_fun.R")# New basis functions for north & south data
-source("R/reslr_load_fun.R")# New basis functions for north & south data
+source("R/plot_data.R") # Plotting separate north & south data & map plot
+source("R/internal_functions.R") # New basis functions for north & south data
+source("R/reslr_mcmc_fun.R") # New basis functions for north & south data
+source("R/cross_val_check_fun.R") # Cross validation
+source("R/reslr_load_fun.R") # updated reslr_load
 
 
 # Read in Andy's updated data:
 global_data <- read_csv("https://www.dropbox.com/s/kqv3o10dnnbx38w/CommonEra2023_new.csv?dl=1")
-colnames(global_data)<- c("Basin","Region","Site","Reference","Indicator",
-                          "Latitude","Longitude","RSL","RSL_err_upr","RSL_err_lwr","Age","Age_2_err_upr","Age_2_err_lwr")
+colnames(global_data) <- c(
+  "Basin", "Region", "Site", "Reference", "Indicator",
+  "Latitude", "Longitude", "RSL", "RSL_err_upr", "RSL_err_lwr", "Age", "Age_2_err_upr", "Age_2_err_lwr"
+)
 # Updating the column names:
-global_df <- global_data %>% 
-  mutate(RSL_err = (RSL_err_upr + RSL_err_lwr)/2,
-         Age_err = ((Age_2_err_upr/2) + (Age_2_err_lwr/2))/2) %>% 
+global_df <- global_data %>%
+  dplyr::mutate(
+    RSL_err = (RSL_err_upr + RSL_err_lwr) / 2,
+    Age_err = ((Age_2_err_upr / 2) + (Age_2_err_lwr / 2)) / 2
+  ) %>%
   # Only looking at Common era
-  filter(Age >= 0) 
+  dplyr::filter(Age >= 0)
 SL_df <- global_df %>%
-  filter(Basin == "North Atlantic") 
+  dplyr::filter(Basin == "North Atlantic")
 
 # Removing Spain as it is problem with linear rate
 SL_df <- SL_df %>%
-  dplyr::filter(!Region == "Norway") %>% 
-  dplyr::filter(!Site %in% c("Muskiz Estuary","Plentzia Estuary")) 
+  dplyr::filter(!Region == "Norway") %>%
+  dplyr::filter(!Site %in% c("Muskiz Estuary", "Plentzia Estuary")) %>%
+  dplyr::select(!c("RSL_err_upr", "RSL_err_lwr", "Age_2_err_upr", "Age_2_err_lwr", "Indicator"))
 
-
-
+# New Irish dataset:
+ireland_data <- read.csv("https://www.dropbox.com/scl/fi/kqa8xyb49v7egd5270129/Ireland_data_2023.csv?rlkey=myt1k5o1kl7nsblm3i7c8h2t4&dl=1")
+ireland_df <- ireland_data %>%
+  dplyr::filter(!Site %in% c("Bull Island", "Cromane"))
+SL_df <- rbind(SL_df, ireland_df)
 # Remove index points
 SL_df <- SL_df %>%
-  dplyr::group_by(Site)%>%
-  dplyr::filter(dplyr::n()>2) %>%
+  dplyr::group_by(Site) %>%
+  dplyr::filter(dplyr::n() > 2) %>%
   # Combine Sand Point Russian & VC
-  mutate(Site = replace(Site, Site == "Sand Point Russian", "Sand Point")) %>%
-  mutate(Site = replace(Site, Site == "Sand Point VC", "Sand Point"))
-
-# North American sites only------------
-SL_df <- SL_df %>% filter(Region %in% c("Connecticut",
-                                        "Florida",
-                                        "Massachusetts",
-                                        "North Carolina","New Jersey",
-                                        "Magdelen Islands","Newfoundland",
-                                        "Quebec","Nova Scotia","Maine","New York","Rhode Island"))
-
-# We include tide gauges for each proxy site--------------------
-north_at_reslr <- reslr_load_fun(data = SL_df,
-                                 include_tide_gauge = TRUE,
-                                 include_linear_rate = TRUE,
-                                 list_preferred_TGs =
-                                   c(
-                                     #"LAKE WORTH PIER",
-                                     "CHARLESTON I",
-                                     "FORT PULASKI",
-                                     "DAYTONA BEACH",
-                                     "WILMINGTON",
-                                     "SPRINGMAID PIER",
-                                     "NAPLES",
-                                     "FORT MYERS"),
-                                 TG_minimum_dist_proxy = TRUE,
-                                 prediction_grid_res = 30)
-saveRDS(north_at_reslr,file = "reslr_inputs/north_at_reslr_TG_LR.rds")
-north_at_reslr <- readRDS("reslr_inputs/north_at_reslr_TG_LR.rds")
-
-# Setting up 2 sections for north and south cape Hatteras:
-data <- north_at_reslr$data %>%
-  mutate(section = ifelse(Latitude > 35.3,"North","South"),
-         SiteName = as.character(SiteName)) %>% 
-  mutate(SiteName = factor(SiteName))
-
-data_grid <- north_at_reslr$data_grid %>%
-  mutate(section = ifelse(Latitude > 35.3,"North","South"),
-         SiteName = as.character(SiteName)) %>% 
-  mutate(SiteName = factor(SiteName))
-
-# north data
-north_data <- data %>% 
-  filter(section == "North")
-# south data 
-south_data <- anti_join(data,north_data)
-
-# Plotting raw data
-data_plot_south <- plot_data(south_data)
-ggsave(data_plot_south,filename = "fig/data_plot_south.pdf",height = 6, width= 10)
-data_plot_north <- plot_data(north_data)
-ggsave(data_plot_north,filename = "fig/data_plot_north.pdf",height = 6, width= 10)
-
-# Plot Map of data
-plot_map(data)
-
-# north data grid
-north_data_grid <- data_grid %>% 
-  filter(section == "North")
-# south data 
-south_data_grid <- anti_join(data_grid,north_data_grid)
-
-# Running the ni-gam using updated reslr code------------------
-# global_output <-
-#   reslr_mcmc_fun(
-#     data = data,
-#     data_grid = data_grid,
-#     n_iterations = 8000,
-#     n_burnin = 2000,
-#     n_thin = 4,
-#     n_chains = 2,
-#     spline_nseg_t = 4,#6,#NULL,#5,#6,# 3 = NULL,#10,
-#     spline_nseg_st = 6,
-#     spline_nseg_c = 20
-#   )
-# saveRDS(global_output,file = "reslr_outputs/global_reslr_output.rds")
-
-# Outputs
-global_output <- readRDS("reslr_outputs/global_reslr_output.rds")
+  dplyr::mutate(Site = replace(Site, Site == "Sand Point Russian", "Sand Point")) %>%
+  dplyr::mutate(
+    Site = replace(Site, Site == "Sand Point VC", "Sand Point"),
+    Site = replace(Site, Site == " Timoleague", "Timoleague")
+  ) %>%
+  # Filter greenland as it has no tg:
+  dplyr::filter(!Region == "Greenland") %>%
+  # Filter out timoleague to see if it is weird
+  dplyr::filter(!Site %in% c("Timoleague"))
 
 
-# Plot outputs--------
-# Total model fit
-tot_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$mu_pred
 
-tot_post_df_full <- data.frame(pred = colMeans(tot_pred_post_full),
-                               lwr = apply(tot_pred_post_full,2,quantile, probs = 0.025),
-                               upr = apply(tot_pred_post_full,2,quantile, probs = 0.975),
-                               lwr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.25),
-                               upr_50 = apply(tot_pred_post_full,2,quantile, probs = 0.75),
-                               global_output$data_grid)
+# We include gia rates before cross val--------------------
+SL_df_gia <- reslr_load_fun(
+  data = SL_df,
+  include_tide_gauge = TRUE,
+  include_linear_rate = TRUE,
+  # all_TG_1deg = TRUE,
+  TG_minimum_dist_proxy = TRUE,
+  # Including tg longer than 75 years in europe
+  list_preferred_TGs = c(
+    "DUBLIN",
+    # Germany & Denmark extra 100 years data
+    # "CUXHAVEN 2", "ESBJERG",
+    # Amsterdam extra 100 & 75 years
+    "VLISSINGEN", "MAASSLUIS", "HOEK VAN HOLLAND",
+    "IJMUIDEN", "DEN HELDER", "HARLINGEN", "WEST-TERSCHELLING",
+    # Belgium extra 100 & 75 years
+    "NIEUWPOORT", "OOSTENDE", "ZEEBRUGGE",
+    # France extra 100 & 75 years --> not working
+    "DUNKERQUE", "BOULOGNE", "CALAIS",
+    "BREST", "LE HAVRE", "ST. NAZAIRE",
+    "ST JEAN DE LUZ (SOCOA)", "LA ROCHELLE-LA PALLICE",
+    # UK extra 100 & 75 years--> site not working:"HOLYHEAD"
+    # "LIVERPOOL (GLADSTONE DOCK)",
+    "SHEERNESS", "TOWER PIER", "SOUTHEND",
+    "NORTH SHIELDS", "NEWLYN",
+    # Portugal & Spain extra 100 & 75 years --> sites not working: "LAGOS"
+    "CASCAIS", "CADIZ II", "CEUTA", "VIGO", # "LA CORUÑA I"#,--> problem site
+    # # North American sites
+    "CHARLESTON I",
+    "FORT PULASKI",
+    "DAYTONA BEACH",
+    "WILMINGTON",
+    "SPRINGMAID PIER",
+    "NAPLES",
+    "FORT MYERS",
+    # 50 years
+    # "DEAL",
+    # "PORTSMOUTH",
+    "DEVONPORT",
+    "HEYSHAM",
+    "MILLPORT",
+    "LERWICK",
+    "TORSHAVN",
+    "DIEPPE",
+    "ROSCOFF",
+    "LE CONQUET",
+    "CONCARNEAU",
+    "LES SABLES D OLONNE",
+    "PORT BLOC",
+    "ARCACHON-EYRAC",
+    "BOUCAU",
+    "LA CORUÑA II",
+    "LEIXOES",
+    "GIBRALTAR"
+  ),
+  prediction_grid_res = 30
+)
 
-tot_post_df <- tot_post_df_full %>% 
-  filter(data_type_id == "ProxyRecord") 
-data <- global_output$data %>% 
-  filter(data_type_id == "ProxyRecord")
-tot_plot <-
-  ggplot()+
-  ggplot2::geom_rect(data = data, ggplot2::aes(
-    xmin = Age - Age_err, xmax = Age + Age_err,
-    ymin = RSL - RSL_err, ymax = RSL + RSL_err,
-    fill = "Uncertainty",
-  ), alpha = 0.7) +
-  ggplot2::geom_point(
-    data = data,
-    ggplot2::aes(y = RSL, x = Age, colour = "black"), size = 0.3
+# Filling in the NA columns for the dataset:
+input_gia_data <- 
+  SL_df_gia$data %>%
+  mutate(Basin = ifelse(is.na(Basin) == TRUE,"North Atlantic",Basin),
+         Region = ifelse(is.na(Region) == TRUE, "",Region),
+         Reference = ifelse(is.na(Reference) == TRUE, "PSMSL database", Reference),
+         SiteName = as.character(SiteName),
+         Site = ifelse(is.na(Site) == TRUE,SiteName,Site),
+         SiteName = as.factor(SiteName))
+
+
+# # Running cross validation for just proxy records------------------
+# east_west_cross_val_list <- cross_val_check_fun(
+#   data = input_gia_data,
+#   data_grid = SL_df_gia$data_grid,
+#   n_fold = 10,
+#   spline_nseg_c = 20,
+#   spline_nseg_t = 8,
+#   spline_nseg_st = 6,
+#   n_iterations = 8000,
+#   n_burnin = 1000,
+#   n_thin = 5,
+#   n_chains = 2,
+#   seed = 38233,
+#   prediction_grid_res = 30
+# )
+
+#saveRDS(east_west_cross_val_list, file = "reslr_outputs/cross_val_ew_without_extra_sites.rds")
+
+cross_val_ew <- readRDS("reslr_outputs/cross_val_ew_without_extra_sites.rds")
+
+cross_val_ew$ME_MAE_RSME_fold_site
+cross_val_ew$ME_MAE_RSME_overall
+true_pred_plt <- cross_val_ew$true_pred_plot_proxy
+true_pred_plt <- cross_val_ew$true_pred_plot_tg
+ggsave(true_pred_plt,filename = "fig/true_pred_ew_proxy.pdf", width = 10, height = 6)
+cross_val_ew$total_coverage
+CV_model_df_proxy <- cross_val_ew$CV_model_df %>% 
+  filter(!data_type_id == "TideGaugeData") 
+
+CV_model_df_tg <- cross_val_ew$CV_model_df %>% 
+  filter(data_type_id == "TideGaugeData") %>% 
+  dplyr::mutate(SiteName = gsub(",\n ","",SiteName))
+
+CV_model_df<- rbind(CV_model_df_proxy,CV_model_df_tg)
+
+true_pred_plot_full <- ggplot2::ggplot(data = CV_model_df, ggplot2::aes(
+  x = true_RSL,
+  y = y_post_pred,
+  colour = "PI"
+)) +
+  ggplot2::geom_errorbar(
+    data = CV_model_df,
+    ggplot2::aes(
+      x = true_RSL,
+      ymin = lwr_PI,
+      ymax = upr_PI
+    ),
+    colour = "red3",
+    width = 0, alpha = 0.5
   ) +
-  geom_line(data = tot_post_df, aes(x = Age, y = pred,colour = "mean"))+
-  geom_ribbon(data = tot_post_df, aes(x = Age,ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(data = tot_post_df,aes(x = Age,ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
+  ggplot2::geom_point() +
+  ggplot2::geom_abline(
+    data = CV_model_df,
+    ggplot2::aes(intercept = 0, slope = 1, colour = "True = Predicted")
+  ) +
   ggplot2::theme_bw() +
   ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "Uncertainty" = ggplot2::alpha("grey", 0.3),
-                               "CI" = ggplot2::alpha("purple3", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval",
-                               expression(paste("1-sigma Error")))
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "black" = "black",
-                                 "mean" = "purple3"
-                               ),
-                               labels = c("Data", "Posterior Fit")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Relative Sea Level (m)",
-    colour = ""
-  )+
-  facet_wrap(~SiteName)
-
-ggsave(tot_plot,filename = "fig/full_dataset/tot_mod_fit.pdf", width = 10, height = 6)
-
-# Rate of change for Common Component
-tot_pred_rate_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$mu_pred_deriv
-tot_rate_post_df_full <- data.frame(pred = colMeans(tot_pred_rate_post_full),
-                                    lwr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.025),
-                                    upr = apply(tot_pred_rate_post_full,2,quantile, probs = 0.975),
-                                    lwr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.25),
-                                    upr_50 = apply(tot_pred_rate_post_full,2,quantile, probs = 0.75),
-                                    global_output$data_grid)
-
-tot_rate_post_df <- tot_rate_post_df_full %>% filter(data_type_id == "ProxyRecord")
-
-tot_rate_plot <- ggplot(data = tot_rate_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = "mean"))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("purple3", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "purple3"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  theme_bw()+
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::geom_hline(yintercept = 0) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10),
-                 strip.text.x = ggplot2::element_text(size = 7),
-                 strip.background = ggplot2::element_rect(fill = c("white"))) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Rate of Change (mm/year)",
-    colour = ""
-  )+
-  facet_wrap(~SiteName)
-
-
-ggsave(tot_rate_plot,filename = "fig/full_dataset/tot_mod_fit_rate.pdf", width = 10, height = 6)
-
-
-# Common Component
-c_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$c_pred
-c_post_df <- data.frame(pred = colMeans(c_pred_post_full),
-                        lwr = apply(c_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(c_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(c_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(c_pred_post_full,2,quantile, probs = 0.75),
-                        global_output$data_grid)
-
-
-c_plot <-
-  ggplot(data = c_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = "mean"))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::theme_bw() +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("brown2", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "brown2"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Sea Level (m)",
-    colour = ""
-  )
-ggsave(c_plot,filename = "fig/full_dataset/common.pdf", width = 10, height = 6)
-
-# Rate of change for Common Component
-c_pred_rate_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$c_pred_deriv
-c_rate_post_df <- data.frame(pred = colMeans(c_pred_rate_post_full),
-                             lwr = apply(c_pred_rate_post_full,2,quantile, probs = 0.025),
-                             upr = apply(c_pred_rate_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(c_pred_rate_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(c_pred_rate_post_full,2,quantile, probs = 0.75),
-                             global_output$data_grid)
-
-c_rate_plot <- ggplot(data = c_rate_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = "mean"))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("brown2", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "brown2"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  theme_bw()+
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::geom_hline(yintercept = 0) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Rate of Change (mm/year)",
-    colour = ""
-  )
-
-ggsave(c_rate_plot,filename = "fig/full_dataset/common_rate.pdf", width = 10, height = 6)
-
-# Non Lin Local Component
-local_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$l_pred
-l_post_df_full <- data.frame(pred = colMeans(local_pred_post_full),
-                             lwr = apply(local_pred_post_full,2,quantile, probs = 0.025),
-                             upr = apply(local_pred_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(local_pred_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(local_pred_post_full,2,quantile, probs = 0.75),
-                             global_output$data_grid)
-#global_output$data)
-l_post_df <- l_post_df_full %>% filter(data_type_id == "ProxyRecord")
-l_plot <- ggplot()+
-  geom_line(data = l_post_df, aes(x = Age, y = pred,colour = "mean"))+
-  geom_ribbon(data = l_post_df,aes(x = Age,ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(data = l_post_df,aes(x = Age,ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::theme_bw() +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("#ad4c14", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "#ad4c14"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Sea Level (m)",
-    colour = ""
-  )+
-  facet_wrap(~SiteName)
-
-
-ggsave(l_plot,filename = "fig/full_dataset/non_lin_loc.pdf", width = 10, height = 6)
-
-# Rate of change of Non Lin Local Component
-local_pred_rate_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$l_pred_deriv
-l_post_rate_df_full <- data.frame(pred = colMeans(local_pred_rate_post_full),
-                                  lwr = apply(local_pred_rate_post_full,2,quantile, probs = 0.025),
-                                  upr = apply(local_pred_rate_post_full,2,quantile, probs = 0.975),
-                                  lwr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.25),
-                                  upr_50 = apply(local_pred_rate_post_full,2,quantile, probs = 0.75),
-                                  global_output$data_grid)
-l_post_rate_df <- l_post_rate_df_full %>% filter(data_type_id == "ProxyRecord")
-l_rate_plot <- ggplot()+
-  geom_line(data = l_post_rate_df, aes(x = Age, y = pred,colour = "mean"))+
-  geom_ribbon(data = l_post_rate_df,aes(x = Age,ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(data = l_post_rate_df,aes(x = Age,ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::theme_bw() +
-  ggplot2::geom_hline(yintercept = 0) +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("#ad4c14", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "#ad4c14"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Rate of Change (mm/year)",
-    colour = ""
-  )+
-  facet_wrap(~SiteName)
-
-
-ggsave(l_rate_plot,filename = "fig/full_dataset/non_lin_loc_rate.pdf", width = 10, height = 6)
-
-# Lin Local Component
-lin_gia_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$g_h_z_x_pred
-l_gia_post_df_full <- data.frame(pred = colMeans(lin_gia_pred_post_full),
-                                 lwr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.025),
-                                 upr = apply(lin_gia_pred_post_full,2,quantile, probs = 0.975),
-                                 lwr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.25),
-                                 upr_50 = apply(lin_gia_pred_post_full,2,quantile, probs = 0.75),
-                                 global_output$data_grid)
-
-l_gia_post_df <- l_gia_post_df_full %>% filter(data_type_id == "ProxyRecord")
-l_gia_plot <- ggplot()+
-  geom_line(data = l_gia_post_df, aes(x = Age, y = pred,colour = "mean"))+
-  geom_ribbon(data = l_gia_post_df,aes(x = Age,ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(data = l_gia_post_df,aes(x = Age,ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  ggplot2::theme_bw() +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c(
-                               "CI" = ggplot2::alpha("#5bac06", 0.2)
-                             ),
-                             labels = c(
-                               CI = "50% & 95% Credible Interval")
-  )+
-  ggplot2::scale_colour_manual("",
-                               values = c(
-                                 "mean" = "#5bac06"
-                               ),
-                               labels = c("Posterior Fit")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(legend.box = "horizontal",
-                 legend.position = "bottom",
-                 axis.title = ggplot2::element_text(size = 12, face = "bold"),
-                 legend.text = ggplot2::element_text(size = 10)) +
-  ggplot2::labs(
-    x = "Year (CE)",
-    y = "Sea Level (m)",
-    colour = ""
-  )+
-  facet_wrap(~SiteName)
-
-
-ggsave(l_gia_plot,filename = "fig/full_dataset/lin_loc_gia_plot.pdf", width = 10, height = 6)
-
-
-
-# Regional component
-r_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$r_pred
-r_post_df <- data.frame(pred = colMeans(r_pred_post_full),
-                        lwr = apply(r_pred_post_full,2,quantile, probs = 0.025),
-                        upr = apply(r_pred_post_full,2,quantile, probs = 0.975),
-                        lwr_50 = apply(r_pred_post_full,2,quantile, probs = 0.25),
-                        upr_50 = apply(r_pred_post_full,2,quantile, probs = 0.75),
-                        global_output$data_grid)
-
-# Correlation between reg components using the spline coefficient:
-b_r_south <-  colMeans(global_output$noisy_model_run_output$BUGSoutput$sims.list$b_t[,1,])
-b_r_north <-  colMeans(global_output$noisy_model_run_output$BUGSoutput$sims.list$b_t[,2,])
-cor_sn <-cor(b_r_south,b_r_north)
-#corrplot(cor_sn,method = 'number')
-# Plot
-reg_plot <- ggplot(data = r_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = section))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = section),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = section),alpha = 0.3)+
-  labs(x = "Year (CE)", y = "Sea Level (m)",colour = "",fill = "")+
-  theme_bw()+
-  ggplot2::scale_colour_manual("",
-                               values = c("deepskyblue2","blue4")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c("deepskyblue2","blue4")
-  )
-ggsave(reg_plot,filename = "fig/full_dataset/reg_ns.pdf", width = 10, height = 6)
-
-
-# Rate of change Regional component
-r_rate_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$r_pred_deriv
-r_rate_post_df <- data.frame(pred = colMeans(r_rate_pred_post_full),
-                             lwr = apply(r_rate_pred_post_full,2,quantile, probs = 0.025),
-                             upr = apply(r_rate_pred_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(r_rate_pred_post_full,2,quantile, probs = 0.75),
-                             global_output$data_grid)
-#global_output$data)
-reg_rate_plot <- ggplot(data = r_rate_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = section))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = section),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = section),alpha = 0.3)+
-  labs(x = "Year (CE)", y = "Rate of Change (mm/year)",colour = "",fill = "")+
-  ggplot2::geom_hline(yintercept = 0) +
-  theme_bw()+
-  ggplot2::scale_colour_manual("",
-                               values = c("deepskyblue2","blue4")
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white"))
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values = c("deepskyblue2","blue4")
-  )
-
-ggsave(reg_rate_plot,filename = "fig/full_dataset/rate_reg_ns.pdf", width = 10, height = 6)
-
-# Difference Regional Rate component
-diff_r_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$diff_r_pred
-diff_r_post_df <- data.frame(pred = colMeans(diff_r_pred_post_full),
-                             lwr = apply(diff_r_pred_post_full,2,quantile, probs = 0.025),
-                             upr = apply(diff_r_pred_post_full,2,quantile, probs = 0.975),
-                             lwr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.25),
-                             upr_50 = apply(diff_r_pred_post_full,2,quantile, probs = 0.75),
-                             global_output$data_grid)
-#global_output$data)
-diff_reg_plot <- ggplot(data = diff_r_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = "mean"))+
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  labs(x = "Year (CE)", y = "South - North (m)",colour = "",fill = "")+
-  theme_bw()+
-  ggplot2::scale_colour_manual("",
-                               values = c("mean"="darkmagenta"),
-                               labels = "Posterior Fit"
-  ) +
-  ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
-    colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
-      size = 2
-    ))
-  ) +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
+    axis.title = ggplot2::element_text(size = 9, face = "bold"),
+    axis.text = ggplot2::element_text(size = 9),
     strip.background = ggplot2::element_rect(fill = c("white")),
-    legend.box = "horizontal",
-    legend.position = "bottom",
-    axis.title = ggplot2::element_text(size = 12, face = "bold"),
-    legend.text = ggplot2::element_text(size = 10)
+    strip.text = ggplot2::element_text(size = 8),
+    legend.text = ggplot2::element_text(size = 7),
+    legend.title = ggplot2::element_blank(),
+    axis.text.x = ggplot2::element_text(size = 8),
+    axis.text.y = ggplot2::element_text(size = 8)
   ) +
-  ggplot2::scale_fill_manual("",
-                             values= c("CI"="darkmagenta"),
-                             labels = "50% & 95% Credible Interval"
-  )
-
-ggsave(diff_reg_plot,filename = "fig/full_dataset/diff_reg_ns.pdf", width = 10, height = 6)
-
-
-# # Difference Regional Rate component
-diff_r_rate_pred_post_full <- global_output$noisy_model_run_output$BUGSoutput$sims.list$diff_r_pred_deriv
-diff_r_rate_post_df <- data.frame(pred = colMeans(diff_r_rate_pred_post_full),
-                                  lwr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.025),
-                                  upr = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.975),
-                                  lwr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.25),
-                                  upr_50 = apply(diff_r_rate_pred_post_full,2,quantile, probs = 0.75),
-                                  global_output$data_grid)
-#global_output$data)
-diff_reg_rate_plot <- ggplot(data = diff_r_rate_post_df, aes(x = Age, y = pred))+
-  geom_line(aes(colour = "mean"))+
-  ggplot2::geom_hline(yintercept = 0) +
-  geom_ribbon(aes(ymin = lwr,ymax=upr,fill = "CI"),alpha = 0.2)+
-  geom_ribbon(aes(ymin = lwr_50,ymax=upr_50,fill = "CI"),alpha = 0.3)+
-  labs(x = "Year (CE)", y = "Rate of Change (mm/year)",colour = "",fill = "")+
-  theme_bw()+
+  ggplot2::theme(legend.box = "horizontal", 
+                 legend.position = "bottom") +
+  ggplot2::labs(
+    x = "True Relative Sea Level (m)",
+    y = "Predicted Relative Sea Level (m)"
+  ) +
   ggplot2::scale_colour_manual("",
-                               values = c("mean"="darkmagenta"),
-                               labels = "Posterior Fit"
+                               values = c(
+                                 c(
+                                   "PI" = "red3",
+                                   # "True = Predicted" = "black")
+                                   "True = Predicted" = "black"
+                                 )
+                               ),
+                               labels = c(
+                                 "PI" = paste0(unique(CV_model_df$CI), " Prediction Interval"),
+                                 "True = Predicted" = "True = Predicted"
+                               )
   ) +
+  ggplot2::facet_wrap(~SiteName, scales = "free") +
   ggplot2::guides(
-    fill = ggplot2::guide_legend(override.aes = list(
-      alpha = c(0.3), # , 0.4),
-      size = 1
-    )),
     colour = ggplot2::guide_legend(override.aes = list(
-      linetype = c(1),
-      shape = c(NA),
+      linetype = c(1, 1),
+      shape = c(NA, NA),
       size = 2
     ))
-  ) +
-  ggplot2::theme(
-    strip.text.x = ggplot2::element_text(size = 7),
-    strip.background = ggplot2::element_rect(fill = c("white")),
-    legend.box = "horizontal",
-    legend.position = "bottom",
-    axis.title = ggplot2::element_text(size = 12, face = "bold"),
-    legend.text = ggplot2::element_text(size = 10)
-  ) +
-  ggplot2::scale_fill_manual("",
-                             values= c("CI"="darkmagenta"),
-                             labels = "50% & 95% Credible Interval"
-  )
+  )+
+  theme(
+    panel.spacing = unit(0,'lines')
+  )+
+  theme(legend.position = c(1, 0),
+        legend.justification = c(1, 0),
+        legend.title=element_blank(),
+        legend.margin=margin(c(1,5,5,5)))
+true_pred_plot_full
+ggsave(true_pred_plot_full,filename = "fig/true_pred_ew.pdf", width = 10, height = 7)
 
-ggsave(diff_reg_rate_plot,filename = "fig/full_dataset/diff_reg_rate_ns.pdf", width = 10, height = 6)
 
+# Prediction Interval size
+prediction_interval_size <- CV_model_df %>%
+  dplyr::group_by(SiteName) %>%
+  dplyr::reframe(PI_width = abs(unique(mean(upr_PI - lwr_PI))),
+                 coverage_by_site =
+                   unique(length(which(obs_in_PI == "TRUE")) / dplyr::n()),
+                 RSME = unique(sqrt((sum(true_RSL - pred_RSL)^2) / dplyr::n())))
+print(xtable(prediction_interval_size,type = "latex",digits=4),
+      file = "reslr_outputs/coverage_by_site_RSME.tex",
+      include.rownames=FALSE)
