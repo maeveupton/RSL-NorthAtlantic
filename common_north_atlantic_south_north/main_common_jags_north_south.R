@@ -10,7 +10,7 @@
 # Clear workspace
 rm(list = ls())
 #---------Set working directory--------------
-setwd("/users/research/mupton/3. RSL_North_Atlantic/2.common_north_atlantic_analysis_north_south")
+setwd("/Users/maeve.upton/Desktop/GitHub/RSL-NorthAtlantic/common_north_atlantic_south_north")
 #----------Load packages--------------------
 library(devtools)
 #install_github("maeveupton/reslr", force = TRUE)
