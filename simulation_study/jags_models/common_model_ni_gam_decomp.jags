@@ -1,0 +1,45 @@
+model {
+  # No noise for ni_gam_decomp
+  for (i in 1:n_obs) {
+    # Main likelihood
+    y[i] ~ dnorm(mu_y[i], sigmasq_all[i]^-1)
+    sigmasq_all[i] <- sigma_y^2 + y_err[i]^2
+    
+    # Mean
+    mu_y[i] <- c[i] + g_z_x[i] + h_z_x[i] 
+    
+    
+    # Site specific vertical offset
+    h_z_x[i] <- intercept[site[i]]
+    
+    # Linear Local component
+    g_z_x[i] <- t[i] * b_g[site[i]]
+    
+    # Linear Local component + Site specific vertical offset
+    g_h_z_x[i] <- h_z_x[i] + g_z_x[i]
+    
+
+  }
+  # Informed Common component
+  c <- B_c %*% b_c
+  for(k in 1:n_knots_c){
+    b_c[k] ~ dnorm(0, sigma_beta_c^-2)
+  }
+  
+  # Prior on intercept
+  for (j in 1:n_sites) {
+    intercept[j] ~ dnorm(0, sigma_beta_h^-2)
+  }
+
+  # Linear Local component
+  for (j in 1:n_sites) {
+    b_g[j] ~ dnorm(linear_rate[j], linear_rate_err[j]^-2)
+  }
+  
+
+  # Priors
+  sigma_y ~ dt(0, 1^-2, 1)T(0,) 
+  sigma_beta_h ~ dt(2.5, 2^-2, 1)T(0,)
+  sigma_beta_c~ dt(0, 1^-2, 1)T(0,)
+  
+}
