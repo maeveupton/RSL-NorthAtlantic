@@ -3,3 +3,5 @@ We use an extended NI-GAM (Upton et al. 2023) to examine the influence of region
 1. East and west sub-regions of the North Atlantic
 2. Two sub-regions along the Atlantic coast of North America: north and south of Cape Hatteras, North Carolina.
 
+In addition, we examined annual tide gauge data along the US Atlantic Coast using the Method described in 2 and results are provided.
+For model validation, a simulation study for the separate extended NI-GAM is provided.
